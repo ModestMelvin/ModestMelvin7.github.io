@@ -1,34 +1,153 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <title>Bouncing Box</title>
     <script src="jquery.min.js"></script>
     <style>
+      :root {
+        --ui-height: 48px;
+      }
+
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .board {
+        height: 100vh;
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(180deg, #eef 0%, #cfe 100%);
+      }
+
       .box {
         width: 70px;
         height: 70px;
         background-color: teal;
         font-size: 300%;
+        line-height: 70px;
+        color: white;
+        font-weight: 700;
         text-align: center;
         user-select: none;
         display: block;
         position: absolute;
-        top: 100px;
-        /* Change me! */
+        top: 120px;
         left: 0px;
+        border-radius: 8px;
+        transition: transform 120ms ease;
       }
 
-      .board {
-        height: 100vh;
+      .box.bounce {
+        transform: scale(1.15);
+      }
+
+      .powerup {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        position: absolute;
+        top: 128px;
+        display: block;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+      }
+      .powerup.slow {
+        background: yellow;
+      }
+      .powerup.double {
+        background: hotpink;
+      }
+
+      /* obstacles removed per user preference */
+
+      .ui {
+        position: fixed;
+        left: 0;
+        right: 0;
+        height: var(--ui-height);
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 6px 12px;
+        z-index: 50;
+      }
+      .ui .item {
+        font-weight: 700;
+      }
+
+      .overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+      }
+      .overlay .panel {
+        background: rgba(255, 255, 255, 0.98);
+        padding: 24px;
+        border-radius: 8px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+        text-align: center;
+      }
+      .btn {
+        display: inline-block;
+        padding: 8px 14px;
+        border-radius: 6px;
+        background: #0a84ff;
+        color: #fff;
+        text-decoration: none;
+        margin-top: 12px;
+        cursor: pointer;
+      }
+
+      .score-flash {
+        position: absolute;
+        top: 80px;
+        left: 12px;
+        color: #222;
+        font-weight: 700;
       }
     </style>
     <!-- 	<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script> -->
   </head>
 
   <body class="board">
+    <div class="ui">
+      <div class="item">Score: <span id="score">0</span></div>
+      <div class="item">High: <span id="high">0</span></div>
+      <div class="item">Lives: <span id="lives">3</span></div>
+      <div class="item">Level: <span id="level">1</span></div>
+    </div>
+
+    <div class="score-flash" id="flash"></div>
+
     <!-- HTML for the box -->
     <div class="box">?</div>
+
+    <!-- containers for dynamic elements -->
+    <div id="entities"></div>
+
+    <div class="overlay" id="startScreen">
+      <div class="panel">
+        <h2>Bouncing Box</h2>
+        <p>
+          Click the box to score points. Avoid obstacles and collect power-ups!
+        </p>
+        <div class="btn" id="startBtn">Start Game</div>
+      </div>
+    </div>
+
+    <div class="overlay" id="gameOverScreen" style="display: none">
+      <div class="panel">
+        <h2>Game Over</h2>
+        <p>Your score: <span id="finalScore">0</span></p>
+        <div class="btn" id="restartBtn">Play Again</div>
+      </div>
+    </div>
 
     <script>
       (function () {
@@ -68,40 +187,237 @@
         /////////////////// YOUR CODE BELOW HERE /////////////////////////
         //////////////////////////////////////////////////////////////////
 
-        // TODO 2 - Variable declarations
+        // game variables
+        var positionX = 0;
+        var points = 0;
+        var speed = 14; // increase base speed
+        var level = 1;
+        var high = parseInt(localStorage.getItem("bb_high") || "0", 10) || 0;
 
+        // power-up state
+        var powerState = {
+          double: false,
+          slow: false,
+          invincible: false,
+        };
 
+        var entities = jQuery("#entities");
+        var scoreEl = jQuery("#score");
+        var highEl = jQuery("#high");
+        var livesEl = jQuery("#lives");
+        var levelEl = jQuery("#level");
+        var flashEl = jQuery("#flash");
+        var startScreen = jQuery("#startScreen");
+        var gameOverScreen = jQuery("#gameOverScreen");
+        var startBtn = jQuery("#startBtn");
+        var restartBtn = jQuery("#restartBtn");
 
+        highEl.text(high);
 
+        // spawn control
+        var powerupTimer = null;
+        var gameRunning = false;
+        // lose-by-inactivity timer (ms)
+        var clickTimerMax = 3000; // 3 seconds to click
+        var clickTimer = clickTimerMax;
+        var lives = 3;
 
-        /**
-         * This Function will be called 20 times/second.
-         * Each time it is called, it should move the Box to a new location.
-         * If the box drifts off the screen, turn it around!
-         */
+        // audio helper (simple tones)
+        var audioCtx = null;
+        function playTone(freq, time, vol) {
+          try {
+            if (!audioCtx)
+              audioCtx = new (
+                window.AudioContext || window.webkitAudioContext
+              )();
+            var o = audioCtx.createOscillator();
+            var g = audioCtx.createGain();
+            o.connect(g);
+            g.connect(audioCtx.destination);
+            g.gain.value = vol || 0.02;
+            o.frequency.value = freq;
+            o.start();
+            setTimeout(function () {
+              o.stop();
+            }, time || 120);
+          } catch (e) {}
+        }
+
+        function startGame() {
+          // reset
+          positionX = 0;
+          points = 0;
+          speed = 14;
+          level = 1;
+          powerState = { double: false, slow: false, invincible: false };
+          entities.empty();
+          scoreEl.text(points);
+          livesEl.text(lives);
+          levelEl.text(level);
+          startScreen.hide();
+          gameOverScreen.hide();
+          gameRunning = true;
+
+          // spawn loops
+          if (powerupTimer) clearInterval(powerupTimer);
+          powerupTimer = setInterval(spawnPowerup, 6000);
+          playTone(880, 120, 0.04);
+        }
+
+        function endGame() {
+          gameRunning = false;
+          if (powerupTimer) clearInterval(powerupTimer);
+          jQuery("#finalScore").text(points);
+          if (points > high) {
+            high = points;
+            localStorage.setItem("bb_high", high);
+            highEl.text(high);
+          }
+          gameOverScreen.show();
+          playTone(120, 400, 0.08);
+        }
+
+        startBtn.on("click", startGame);
+        restartBtn.on("click", startGame);
+
+        // spawn a powerup at a random x
+        function spawnPowerup() {
+          if (!gameRunning) return;
+          var types = ["slow", "double"];
+          var type = types[Math.floor(Math.random() * types.length)];
+          var pu = jQuery("<div/>")
+            .addClass("powerup")
+            .addClass(type)
+            .attr("data-type", type);
+          var x = Math.max(8, Math.floor(Math.random() * (boardWidth - 40)));
+          pu.css("left", x + "px");
+          entities.append(pu);
+          // auto-remove after 8s
+          setTimeout(function () {
+            pu.fadeOut(300, function () {
+              pu.remove();
+            });
+          }, 8000);
+        }
+
+        // obstacles removed per user preference; no spawnObstacle()
+
+        function rectOf(jq) {
+          return {
+            left: parseFloat(jq.css("left")) || 0,
+            right: (parseFloat(jq.css("left")) || 0) + jq.outerWidth(),
+          };
+        }
+
+        function overlap(a, b) {
+          return a.left < b.right && a.right > b.left;
+        }
+
+        // update loop called by setInterval above
         function update() {
+          if (!gameRunning) return;
 
-        
+          var boxWidth = box.outerWidth();
 
-          
+          // move and advance position
+          moveBoxTo(positionX);
+          positionX = positionX + (powerState.slow ? speed * 0.5 : speed);
+
+          // right-wall collision
+          if (positionX > boardWidth - boxWidth) {
+            positionX = boardWidth - boxWidth;
+            speed = -Math.abs(speed);
+            box.addClass("bounce");
+            playTone(600, 80, 0.02);
+            setTimeout(function () {
+              box.removeClass("bounce");
+            }, 120);
+          }
+
+          // left-wall collision
+          if (positionX < 0) {
+            positionX = 0;
+            speed = Math.abs(speed);
+            box.addClass("bounce");
+            playTone(600, 80, 0.02);
+            setTimeout(function () {
+              box.removeClass("bounce");
+            }, 120);
+          }
+
+          // check collisions with powerups
+          entities.find(".powerup").each(function () {
+            var pu = jQuery(this);
+            var puRect = rectOf(pu);
+            var boxRect = { left: positionX, right: positionX + boxWidth };
+            if (overlap(boxRect, puRect)) {
+              var t = pu.attr("data-type");
+              if (t === "slow") {
+                powerState.slow = true;
+                setTimeout(function () {
+                  powerState.slow = false;
+                }, 5000);
+              } else if (t === "double") {
+                powerState.double = true;
+                setTimeout(function () {
+                  powerState.double = false;
+                }, 6000);
+              }
+              playTone(1200, 100, 0.05);
+              pu.remove();
+            }
+          });
+
+          // inactivity timer: player must click the box periodically or lose a life
+          clickTimer -= 50; // update() is called every 50ms
+          if (clickTimer <= 0) {
+            clickTimer = clickTimerMax; // reset timer after penalty
+            lives = Math.max(0, lives - 1);
+            livesEl.text(lives);
+            flashEl.text("-1 life").fadeIn(80).delay(500).fadeOut(400);
+            playTone(220, 220, 0.07);
+            if (lives <= 0) {
+              endGame();
+            }
+          }
+
+          // update level based on points
+          var newLevel = Math.floor(points / 5) + 1;
+          if (newLevel !== level) {
+            level = newLevel;
+            levelEl.text(level);
+            // speed increases slightly every level
+            speed =
+              Math.sign(speed) || 1 * (10 + level * 2 + Math.floor(points / 3));
+            playTone(900, 120, 0.04);
+          }
         }
 
         /**
          * This Function will be called each time the box is clicked.
-         * Each time it is called, it should perform each of the following actions:
-         * - increase the points total
-         * - increase the speed
-         * - move the box to the left side of the screen.
          */
         function handleBoxClick() {
-
-
-
-
+          if (!gameRunning) return;
+          positionX = 0;
+          clickTimer = clickTimerMax; // reset inactivity timer on click
+          var gained = powerState.double ? 2 : 1;
+          points += gained;
+          scoreEl.text(points);
+          flashEl
+            .text("+" + gained)
+            .fadeIn(100)
+            .delay(300)
+            .fadeOut(400);
+          // speed increases gradually and always moves right after click
+          var magnitude = 12 + Math.floor(points * 0.8);
+          speed = Math.abs(magnitude);
+          // small bounce and sound
+          box.addClass("bounce");
+          playTone(1400, 90, 0.04);
+          setTimeout(function () {
+            box.removeClass("bounce");
+          }, 140);
         }
-
-
-        
       })();
     </script>
   </body>

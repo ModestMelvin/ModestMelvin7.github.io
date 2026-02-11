@@ -31,6 +31,8 @@ const HUD_SETTINGS = {
 // setup variables
 const gravity = 0.5; // how much is subtracted from speedY each frame
 const playerJumpStrength = 12; // this is subtracted from the speedY each jump
+// Multiplier applied to jump strength when player is crouching before jumping
+const crouchJumpMultiplier = 1.9; // increase this to make crouch-jump higher (1 = no boost)
 
 const projectileSpeed = 8; // the speed of projectiles
 const projectileDamage = 1; // how much damage a projectile does to an enemy

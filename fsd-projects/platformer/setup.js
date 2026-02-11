@@ -1,10 +1,26 @@
 // setup variables
-const walkAcceleration = 2.5; // how much is added to the speed each frame
+const walkAcceleration = 1.6; // how much is added to the speed each frame (lowered for better control)
 const gravity = 0.5; // how much is subtracted from speedY each frame
-const friction = 1.5; // how much the player is slowed each frame
-const maxSpeed = 8; // maximum horizontal speed, not vertical
+const friction = 2.0; // increased so player slows more quickly when no input
+const maxSpeed = 6; // maximum horizontal speed, not vertical (reduced top speed)
 const playerJumpStrength = 12; // this is subtracted from the speedY each jump
+// Multiplier applied to jump strength when player is crouching before jumping
+const crouchJumpMultiplier = 1.4; // increase this to make crouch-jump higher (1 = no boost)
+// Multiplier applied to horizontal movement while crouching (fraction of normal walk)
+const crouchWalkMultiplier = 1; // 1 = normal, <1 = slower while crouching
+// Air control - allow some horizontal acceleration while in the air (1 = same as ground)
+const airAccelerationMultiplier = 1; // fraction of walkAcceleration applied while airborne
+// Air friction is smaller so you can retain horizontal speed in mid-air
+const airFrictionMultiplier = 0.15;
 const projectileSpeed = 8; // the speed of projectiles
+
+// Cannon speed scaling after collectables
+const cannonReductionPerCollectable = 0.12; // 12% faster per collectable
+const cannonMinIntervalMS = 400; // minimum milliseconds between shots (ms) to keep gameplay fair
+
+// How long the player is invulnerable after being knocked by a projectile
+const playerInvulnMS = 1000; // milliseconds of invulnerability
+
 let shouldDrawGrid = false;
 let gridMade = false;
 
@@ -28,6 +44,9 @@ const player = {
   facingRight: true,
   deadAndDeathAnimationDone: false,
   winConditionMet: false,
+  // invulnerability after being hit by a projectile
+  invulnerable: false,
+  invulnerableTimer: 0,
 };
 
 let hitDx;

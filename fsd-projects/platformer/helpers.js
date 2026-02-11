@@ -52,10 +52,22 @@ function getJSON(url, callback) {
   xhr.responseType = "json";
   xhr.onload = function () {
     var status = xhr.status;
+    console.log(
+      "%c getJSON:",
+      "color: purple; font-weight: bold;",
+      url,
+      "status:",
+      status,
+    );
     if (status === 200) {
+      console.log(
+        "%c getJSON success, calling setupGame()",
+        "color: green; font-weight: bold;",
+      );
       callback(null, xhr.response);
       setupGame();
     } else {
+      console.error("getJSON error loading", url, "status", status);
       callback(status, xhr.response);
     }
   };
@@ -63,6 +75,12 @@ function getJSON(url, callback) {
 }
 
 function JsonFunction(status, response) {
+  console.log(
+    "%c JsonFunction called, status:",
+    "color: orange; font-weight: bold;",
+    status,
+  );
+  console.log("animation keys:", Object.keys(response || {}));
   /*
       diagram of the json
       top level is the name of the animation
@@ -223,6 +241,12 @@ function drawRobot() {
     return; //return stops the function, we don't want to draw the robot after we die
   }
 
+  // make player slightly transparent to indicate invulnerability
+  var prevAlpha = ctx.globalAlpha;
+  if (player.invulnerable) {
+    ctx.globalAlpha = 0.6;
+  }
+
   if (player.facingRight) {
     ctx.drawImage(
       halleImage,
@@ -233,7 +257,7 @@ function drawRobot() {
       player.x - hitDx,
       player.y - hitDy,
       player.width,
-      player.height
+      player.height,
     );
   } else {
     //for running to the left you mirror the image
@@ -248,16 +272,24 @@ function drawRobot() {
       -player.x - player.width + hitDx,
       player.y - hitDy,
       player.width,
-      player.height
+      player.height,
     );
     ctx.restore(); //put the canvas back to normal
   }
+
+  // restore alpha
+  ctx.globalAlpha = prevAlpha;
 }
 
 function collision() {
   player.onGround = false; // Reset this every frame; if the player is actually on the ground, the resolveCollision function will set it to true
   var result = undefined;
   for (var i = 0; i < platforms.length; i++) {
+    // If this platform has been marked passable (opened), skip collision checks
+    if (platforms[i].passable) {
+      continue;
+    }
+
     // Check for collision
     if (
       player.x + hitBoxWidth > platforms[i].x &&
@@ -270,7 +302,7 @@ function collision() {
         platforms[i].x,
         platforms[i].y,
         platforms[i].width,
-        platforms[i].height
+        platforms[i].height,
       );
     }
   }
@@ -364,8 +396,28 @@ function projectileCollision() {
       projectiles[i].y < player.y + hitBoxHeight &&
       projectiles[i].y + projectiles[i].height > player.y
     ) {
-      currentAnimationType = animationTypes.frontDeath;
-      frameIndex = 0;
+      // if currently invulnerable, ignore the hit
+      if (player.invulnerable) {
+        continue;
+      }
+
+      // Apply knockback instead of death: horizontal push from projectile and an upward boost
+      var knockbackX = projectiles[i].speedX * 1.5; // amplify a bit
+      var knockbackY = -12; // push upward so player is knocked off platforms
+      player.speedX = knockbackX;
+      player.speedY = knockbackY;
+      player.onGround = false;
+
+      // give the player a short invulnerability period to prevent instant repeated hits
+      player.invulnerable = true;
+      player.invulnerableTimer = Math.round(
+        playerInvulnMS / (1000 / frameRate),
+      );
+
+      // remove the projectile and continue
+      projectiles.splice(i, 1);
+      i--;
+      continue;
     }
   }
 }
@@ -393,7 +445,7 @@ function deathOfPlayer() {
     canvas.width / 4,
     canvas.height / 6,
     canvas.width / 2,
-    canvas.height / 2
+    canvas.height / 2,
   );
   ctx.fillStyle = "black";
   ctx.font = "800% serif";
@@ -401,14 +453,14 @@ function deathOfPlayer() {
     "You are dead",
     canvas.width / 4,
     canvas.height / 6 + canvas.height / 5,
-    (canvas.width / 16) * 14
+    (canvas.width / 16) * 14,
   );
   ctx.font = "500% serif";
   ctx.fillText(
     "Hit any key to restart",
     canvas.width / 4,
     canvas.height / 6 + canvas.height / 3,
-    (canvas.width / 16) * 14
+    (canvas.width / 16) * 14,
   );
   if (keyPress.any) {
     keyPress.any = false;
@@ -417,21 +469,32 @@ function deathOfPlayer() {
 }
 
 function playerFrictionAndGravity() {
+  // Invulnerability countdown timer (prevents repeated immediate hits)
+  if (player.invulnerableTimer > 0) {
+    player.invulnerableTimer--;
+    if (player.invulnerableTimer <= 0) {
+      player.invulnerable = false;
+    }
+  }
+
   //max speed limiter for ground
   if (player.speedX > maxSpeed) {
     player.speedX = maxSpeed;
   } else if (player.speedX < -maxSpeed) {
     player.speedX = -maxSpeed;
   }
-  //friction
+  //friction (reduced while airborne so you maintain momentum)
+  const currentFriction = player.onGround
+    ? friction
+    : friction * airFrictionMultiplier;
   if (Math.abs(player.speedX) < 1) {
     //this makes sure that the player actually stops when the speed gets low enough
     //otherwise if you just always reduce speed it will just end up jiggling
     player.speedX = 0;
   } else if (player.speedX > 0) {
-    player.speedX = player.speedX - friction;
+    player.speedX = player.speedX - currentFriction;
   } else {
-    player.speedX = player.speedX + friction;
+    player.speedX = player.speedX + currentFriction;
   }
 
   if (player.onGround === false) {
@@ -441,39 +504,46 @@ function playerFrictionAndGravity() {
 
 function drawPlatforms() {
   for (var i = 0; i < platforms.length; i++) {
-    // Check if platform should move horizontally
+    // Move platform horizontally if bounds are set
     if (platforms[i].minX !== null && platforms[i].maxX !== null) {
-      // Move platform based on speed and direction
       platforms[i].x += platforms[i].speedX * platforms[i].directionX;
-
-      // Reverse direction if platform reaches minX or maxX bounds
       if (platforms[i].x < platforms[i].minX) {
         platforms[i].x = platforms[i].minX;
-        platforms[i].directionX *= -1; // Change direction to right
+        platforms[i].directionX *= -1;
       } else if (platforms[i].x > platforms[i].maxX) {
         platforms[i].x = platforms[i].maxX;
-        platforms[i].directionX *= -1; // Change direction to left
+        platforms[i].directionX *= -1;
       }
     }
 
-    // Check if platform should move vertically
+    // Move platform vertically if bounds are set
     if (platforms[i].minY !== null && platforms[i].maxY !== null) {
-      // Move platform based on speed and direction
       platforms[i].y += platforms[i].speedY * platforms[i].directionY;
-      // Reverse direction if platform reaches minY or maxY bounds
       if (platforms[i].y < platforms[i].minY) {
         platforms[i].y = platforms[i].minY;
-        platforms[i].directionY *= -1; // Change direction to down
+        platforms[i].directionY *= -1;
       } else if (platforms[i].y > platforms[i].maxY) {
         platforms[i].y = platforms[i].maxY;
-        platforms[i].directionY *= -1; // Change direction to up
+        platforms[i].directionY *= -1;
       }
     }
 
-    // Draw the platform
-    const { color, x, y, width, height } = platforms[i];
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, width, height);
+    // Determine draw color: if this is a barrier, closed = blue, open = skyblue; otherwise use normal color
+    var drawColor;
+    if (platforms[i].barrierId) {
+      drawColor = platforms[i].passable
+        ? platforms[i].openColor || "skyblue"
+        : platforms[i].closedColor || "blue";
+    } else {
+      drawColor = platforms[i].color;
+    }
+    ctx.fillStyle = drawColor;
+    ctx.fillRect(
+      platforms[i].x,
+      platforms[i].y,
+      platforms[i].width,
+      platforms[i].height,
+    );
   }
 }
 
@@ -509,7 +579,7 @@ function makeGrid() {
     ctx.fillText(
       i, // text
       i - 15, // x location
-      25 // y location
+      25, // y location
     );
   }
 
@@ -523,7 +593,7 @@ function makeGrid() {
     ctx.fillText(
       i, // text
       10, // x location
-      i + 5 // y location
+      i + 5, // y location
     );
   }
   gridMade = true;
@@ -536,7 +606,7 @@ function drawProjectiles() {
       projectiles[i].x,
       projectiles[i].y,
       projectiles[i].width,
-      projectiles[i].height
+      projectiles[i].height,
     );
     projectiles[i].x = projectiles[i].x + projectiles[i].speedX;
     projectiles[i].y = projectiles[i].y + projectiles[i].speedY;
@@ -552,7 +622,7 @@ function drawCannons() {
         cannons[i].x,
         cannons[i].y,
         cannons[i].projectileWidth,
-        cannons[i].projectileHeight
+        cannons[i].projectileHeight,
       );
     } else {
       cannons[i].projectileCountdown = cannons[i].projectileCountdown + 1;
@@ -593,7 +663,7 @@ function drawCollectables() {
         collectables[i].x,
         collectables[i].y,
         collectableWidth,
-        collectableHeight
+        collectableHeight,
       );
     } else {
       //draw the icons at the top if collected
@@ -606,7 +676,7 @@ function drawCollectables() {
         200 + 100 * i,
         10,
         collectableWidth,
-        collectableHeight
+        collectableHeight,
       );
       ctx.globalAlpha = 1;
     }
@@ -655,6 +725,10 @@ function collectablesCollide() {
       collectables[i].y + collectableHeight > player.y
     ) {
       collectables[i].collected = true;
+      // Update cannon firing intervals when a collectable is collected
+      adjustCannonsForCollected();
+      // Update barriers based on how many collectables have been picked up
+      updateBarriersBasedOnCollects();
       checkForWin();
     }
   }
@@ -672,6 +746,23 @@ function checkForWin() {
   player.winConditionMet = true; // Set win condition to true
 }
 
+function adjustCannonsForCollected() {
+  // Recalculate cannon firing intervals based on how many collectables the player has picked up
+  const collectedCount = collectables.filter(function (c) {
+    return c.collected === true;
+  }).length;
+  const reduction = cannonReductionPerCollectable; // fraction per collectable
+  const minFrames = cannonMinIntervalMS / (1000 / frameRate);
+
+  for (var i = 0; i < cannons.length; i++) {
+    var base = cannons[i].baseTimeBetweenShots || cannons[i].timeBetweenShots;
+    // Apply linear reduction but do not go below 25% of base interval
+    var factor = Math.max(0.25, 1 - reduction * collectedCount);
+    var newInterval = Math.max(minFrames, base * factor);
+    cannons[i].timeBetweenShots = newInterval;
+  }
+}
+
 function winGame() {
   // If we reach this point, all collectables are collected
   ctx.fillStyle = "grey";
@@ -679,7 +770,7 @@ function winGame() {
     canvas.width / 4,
     canvas.height / 6,
     canvas.width / 2,
-    canvas.height / 2
+    canvas.height / 2,
   );
   ctx.fillStyle = "white";
   ctx.font = "800% serif";
@@ -687,14 +778,14 @@ function winGame() {
     "You Win!",
     canvas.width / 4,
     canvas.height / 6 + canvas.height / 5,
-    (canvas.width / 16) * 14
+    (canvas.width / 16) * 14,
   );
   ctx.font = "500% serif";
   ctx.fillText(
     "Hit any key to restart",
     canvas.width / 4,
     canvas.height / 6 + canvas.height / 3,
-    (canvas.width / 16) * 14
+    (canvas.width / 16) * 14,
   );
   if (keyPress.any) {
     keyPress.any = false;
@@ -713,7 +804,7 @@ function createPlatform(
   speedX = 1,
   minY = null,
   maxY = null,
-  speedY = 1
+  speedY = 1,
 ) {
   platforms.push({
     x,
@@ -730,6 +821,37 @@ function createPlatform(
     directionX: 1, // 1 for right, -1 for left
     directionY: 1, // 1 for down, -1 for up
   });
+}
+
+// Create a barrier segment that can be opened/closed later by collectables.
+function createBarrierSegment(x, y, width, height, color, id, open = false) {
+  createPlatform(x, y, width, height, color);
+  var p = platforms[platforms.length - 1];
+  p.barrierId = id;
+  p.passable = open; // if true, collision ignores this platform
+  p.closedColor = color;
+  p.openColor = "skyblue"; // visible color when opened
+}
+
+function setBarrierOpen(id, open) {
+  for (var i = 0; i < platforms.length; i++) {
+    if (platforms[i].barrierId === id) {
+      platforms[i].passable = open;
+      // color is handled in drawPlatforms for barrier segments
+    }
+  }
+}
+
+function updateBarriersBasedOnCollects() {
+  var collectedCount = collectables.filter(function (c) {
+    return c.collected === true;
+  }).length;
+
+  // After first collectable, open y=500 right segment
+  setBarrierOpen("bar500right", collectedCount >= 1);
+
+  // After second collectable, open y=1000 right segment
+  setBarrierOpen("bar1000right", collectedCount >= 2);
 }
 
 function createFakePlatform(x, y, width, height, color = "grey") {
@@ -760,7 +882,7 @@ function createCannon(
   height = defaultProjectileHeight,
   minPos = null,
   maxPos = null,
-  speed = 1
+  speed = 1,
 ) {
   if (wallLocation === "top") {
     cannons.push({
@@ -769,6 +891,7 @@ function createCannon(
       rotation: 180,
       projectileCountdown: 0,
       location: wallLocation,
+      baseTimeBetweenShots: timeBetweenShots / (1000 / frameRate),
       timeBetweenShots: timeBetweenShots / (1000 / frameRate),
       projectileWidth: width,
       projectileHeight: height,
@@ -786,6 +909,7 @@ function createCannon(
       rotation: 0,
       projectileCountdown: 0,
       location: wallLocation,
+      baseTimeBetweenShots: timeBetweenShots / (1000 / frameRate),
       timeBetweenShots: timeBetweenShots / (1000 / frameRate),
       projectileWidth: width,
       projectileHeight: height,
@@ -803,6 +927,7 @@ function createCannon(
       rotation: 90,
       projectileCountdown: 0,
       location: wallLocation,
+      baseTimeBetweenShots: timeBetweenShots / (1000 / frameRate),
       timeBetweenShots: timeBetweenShots / (1000 / frameRate),
       projectileWidth: width,
       projectileHeight: height,
@@ -820,6 +945,7 @@ function createCannon(
       rotation: 270,
       projectileCountdown: 0,
       location: wallLocation,
+      baseTimeBetweenShots: timeBetweenShots / (1000 / frameRate),
       timeBetweenShots: timeBetweenShots / (1000 / frameRate),
       projectileWidth: width,
       projectileHeight: height,
@@ -841,7 +967,7 @@ function createCollectable(
   bounce = 1,
   minX = null,
   maxX = null,
-  speed = 1
+  speed = 1,
 ) {
   if (type !== "") {
     var image = document.createElement("img");
@@ -922,20 +1048,25 @@ function keyboardControlActions() {
     return;
   }
 
+  // allow walking while crouching at a reduced speed, and allow air control
+  const movementMultiplier = keyPress.down ? crouchWalkMultiplier : 1;
+  const accelMultiplier = player.onGround ? 1 : airAccelerationMultiplier;
   if (keyPress.left) {
-    player.speedX -= walkAcceleration;
+    player.speedX -= walkAcceleration * movementMultiplier * accelMultiplier;
     player.facingRight = false;
   }
   if (keyPress.right) {
-    player.speedX += walkAcceleration;
+    player.speedX += walkAcceleration * movementMultiplier * accelMultiplier;
     player.facingRight = true;
   }
   if (keyPress.space || keyPress.up) {
     if (player.onGround) {
       //this only lets you jump if you are on the ground
-      player.speedY = player.speedY - playerJumpStrength;
+      const crouchBoost = keyPress.down ? crouchJumpMultiplier : 1;
+      player.speedY = player.speedY - playerJumpStrength * crouchBoost;
       jumpTimer = 19; //this counts how many frames to have the jump last.
       player.onGround = false; //bug fix for jump animation, you have to change this or the jump animation doesn't work
+      duckTimer = 0;
       frameIndex = 4;
     }
   }
@@ -943,41 +1074,43 @@ function keyboardControlActions() {
 
 function handleKeyDown(e) {
   keyPress.any = true;
-  if (e.key === "ArrowUp" || e.key === "w") {
+  const key = e.key.toLowerCase();
+  if (key === "arrowup" || key === "w") {
     keyPress.up = true;
   }
-  if (e.key === "ArrowLeft" || e.key === "a") {
+  if (key === "arrowleft" || key === "a") {
     keyPress.left = true;
   }
-  if (e.key === "ArrowDown" || e.key === "s") {
+  if (key === "arrowdown" || key === "s" || key === "shift") {
     keyPress.down = true;
   }
-  if (e.key === "ArrowRight" || e.key === "d") {
+  if (key === "arrowright" || key === "d") {
     keyPress.right = true;
   }
-  if (e.key === " ") {
+  if (key === " ") {
     keyPress.space = true;
   }
 }
 
 function handleKeyUp(e) {
-  if (e.key === "ArrowUp" || e.key === "w") {
+  const key = e.key.toLowerCase();
+  if (key === "arrowup" || key === "w") {
     keyPress.up = false;
   }
-  if (e.key === "ArrowLeft" || e.key === "a") {
+  if (key === "arrowleft" || key === "a") {
     keyPress.left = false;
   }
-  if (e.key === "ArrowDown" || e.key === "s") {
+  if (key === "arrowdown" || key === "s" || key === "shift") {
     keyPress.down = false;
     if (currentAnimationType === animationTypes.duck) {
       duckTimer = 8;
       frameIndex = 20;
     }
   }
-  if (e.key === "ArrowRight" || e.key === "d") {
+  if (key === "arrowright" || key === "d") {
     keyPress.right = false;
   }
-  if (e.key === " ") {
+  if (key === " ") {
     keyPress.space = false;
   }
 }

@@ -4,13 +4,38 @@ $(function () {
   ctx = canvas.getContext("2d");
   window.addEventListener("load", loadJson);
 
+  console.log("%c platformer.js loaded", "color: green; font-weight: bold;");
+
   function setup() {
+    console.log("%c setup() called", "color: blue; font-weight: bold;");
     if (firstTimeSetup) {
       halleImage = document.getElementById("player");
       projectileImage = document.getElementById("projectile");
       cannonImage = document.getElementById("cannon");
       $(document).on("keydown", handleKeyDown);
       $(document).on("keyup", handleKeyUp);
+      // Block default browser behavior for game keys so Shift/arrow/space don't scroll the page
+      window.addEventListener("keydown", function (e) {
+        const keysToBlock = [
+          "ArrowUp",
+          "ArrowDown",
+          "ArrowLeft",
+          "ArrowRight",
+          " ",
+          "w",
+          "a",
+          "s",
+          "d",
+          "Shift",
+          "W",
+          "A",
+          "S",
+          "D",
+        ];
+        if (keysToBlock.includes(e.key)) {
+          e.preventDefault();
+        }
+      });
       firstTimeSetup = false;
       //start game
       setInterval(main, 1000 / frameRate);
@@ -27,27 +52,97 @@ $(function () {
     //////////////////////////////////
 
     // TODO 1 - Enable the Grid
-    // toggleGrid();
-
+    toggleGrid();
 
     // TODO 2 - Create Platforms
+//Level 1//
+    // Horizontal barrier at y=500: left half blocks permanently, right half (x >= 600) opens after first collectable.
+    createBarrierSegment(0, 500, 600, 20, "blue", "bar500up", false); // left side (stays closed)
+    createBarrierSegment(
+      600,
+      500,
+      canvas.width - 600,
+      20,
+      "blue",
+      "bar500right",
+      false,
+    ); // right side (opens after 1st collectable)
 
+    // Example platforms for level 1
+    createPlatform(100, 250, 100, 20);
+    createPlatform(400, 400, 50, 20);
+    createPlatform(300, 200, 100, 20);
+    createPlatform(200, 250, 100, 20, "Lightblue");
 
+    //Level 2//
+    // Horizontal barrier at y=1000: left half blocks permanently, right half (x >= 600) opens after second collectable.
+    createBarrierSegment(0, 1000, 600, 20, "blue", "bar1000left", false); // left side (stays closed)
+    createBarrierSegment(
+      600,
+      1000,
+      canvas.width - 600,
+      20,
+      "blue",
+      "bar1000right",
+      false,
+    
+    ); // right side (opens after 2nd collectable)
 
+    createPlatform(570, 570, 50, 20);
+    createPlatform(750, 450, 50, 20);
+    createPlatform(600, 300, 50, 20);
+    createPlatform(800, 200, 25, 20);
+    createPlatform(735, 200, 80, 20, "Lightblue");
+
+    //Level 3//
+    createPlatform(1110, 625, 25, 20);
+    createPlatform(1320, 525, 10, 20);
+    createPlatform(1110, 300, 10, 20);
+    createPlatform(1350, 200, 5, 20);
 
     // TODO 3 - Create Collectables
-
-
-
-    
+    //Level 1//
+    createCollectable("database", 100, 100, 0, 0);
+    //Level 2//
+    createCollectable("database", 800, 25, 0, 0);
+    //Level 3//
+    createCollectable("database", 1350, 1, 0, 0);
+    createCollectable("database", 400, 600 , 0, 0);
     // TODO 4 - Create Cannons
+    //Level 1//
+    // Use the correct function name and lowercase side. Lowered delay so cannon fires visibly.
+    createCannon("left", 300, 1500);
+    createCannon("left", 50, 2000);
+    createCannon("left", 600, 2000);
 
-
-    
-    
     //////////////////////////////////
     // ONLY CHANGE ABOVE THIS POINT //
     //////////////////////////////////
+
+    // Debug: log canvas and platforms to inspect barrier placement
+    console.log(
+      "%c canvas size:",
+      "color: teal; font-weight: bold;",
+      canvas.width,
+      canvas.height,
+    );
+    console.log(
+      "%c platforms count:",
+      "color: teal; font-weight: bold;",
+      platforms.length,
+    );
+    console.log(
+      "%c barriers:",
+      "color: teal; font-weight: bold;",
+      platforms.filter(function (p) {
+        return p.barrierId !== undefined;
+      }),
+    );
+    console.log(
+      "%c first 10 platforms:",
+      "color: teal; font-weight: bold;",
+      platforms.slice(0, 10),
+    );
   }
 
   registerSetup(setup);

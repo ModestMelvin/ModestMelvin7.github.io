@@ -19,22 +19,19 @@ $(function () {
       // we want to block arrow keys and space from scrolling the page
       window.addEventListener("keydown", function (e) {
         const keysToBlock = [
-          "ArrowUp",
-          "ArrowDown",
-          "ArrowLeft",
-          "ArrowRight",
+          "arrowup",
+          "arrowdown",
+          "arrowleft",
+          "arrowright",
           " ",
           "w",
           "a",
           "s",
           "d",
-          "W",
-          "A",
-          "S",
-          "D",
+          "shift",
         ];
 
-        if (keysToBlock.includes(e.key)) {
+        if (keysToBlock.includes(e.key.toLowerCase())) {
           e.preventDefault();
         }
       });
@@ -298,7 +295,7 @@ function drawScenery() {
     const sceneryType = scenery[sceneryTypeKey];
     const image =
       document.getElementById(
-        sceneryTypeKey
+        sceneryTypeKey,
       ); /* get the image for this scenery type */
     // iterate through each instance of this scenery type
     for (let i = 0; i < sceneryType.instances.length; i++) {
@@ -310,7 +307,7 @@ function drawScenery() {
         instance.x,
         instance.y ? instance.y - instance.height : groundY - instance.height,
         instance.width,
-        instance.height
+        instance.height,
       );
     }
   }
@@ -328,7 +325,7 @@ function drawInteractables() {
       entity.x,
       entity.y - entity.height,
       entity.width,
-      entity.height
+      entity.height,
     );
   }
 }
@@ -361,7 +358,7 @@ function drawProjectiles() {
       projectile.x,
       projectile.y,
       projectile.width,
-      projectile.height
+      projectile.height,
     );
   }
 }
@@ -438,9 +435,13 @@ function keyboardControlActions() {
   ) {
     //this only lets you jump if you are on the ground
     currentAnimationType = animationTypes.jump;
-    player.speedY = -playerJumpStrength;
+    // if the player is crouching when they jump, apply a multiplier for a higher jump
+    const crouchBoost = keyPress.down ? crouchJumpMultiplier : 1;
+    player.speedY = -playerJumpStrength * crouchBoost;
     jumpTimer = 19; //this counts how many frames to have the jump last.
     player.onGround = false; //bug fix for jump animation, you have to change this or the jump animation doesn't work
+    // reset duck timer so animation doesn't block the jump visuals
+    duckTimer = 0;
     frameIndex = 4;
   }
 
@@ -560,7 +561,7 @@ function drawRobot() {
     player.x - player.hitDx,
     player.y - player.hitDy,
     player.width,
-    player.height
+    player.height,
   );
 }
 
@@ -570,29 +571,31 @@ function drawRobot() {
 
 function handleKeyDown(e) {
   keyPress.any = true;
-  if (e.key === "ArrowUp" || e.key === "w") {
+  const key = e.key.toLowerCase();
+  if (key === "arrowup" || key === "w") {
     keyPress.up = true;
   }
-  if (e.key === "ArrowDown" || e.key === "s") {
+  if (key === "arrowdown" || key === "s" || key === "shift") {
     keyPress.down = true;
   }
-  if (e.key === " ") {
+  if (key === " ") {
     keyPress.space = true;
   }
 }
 
 function handleKeyUp(e) {
-  if (e.key === "ArrowUp" || e.key === "w") {
+  const key = e.key.toLowerCase();
+  if (key === "arrowup" || key === "w") {
     keyPress.up = false;
   }
-  if (e.key === "ArrowDown" || e.key === "s") {
+  if (key === "arrowdown" || key === "s" || key === "shift") {
     keyPress.down = false;
     if (currentAnimationType === animationTypes.duck) {
       duckTimer = 8;
       frameIndex = 20;
     }
   }
-  if (e.key === " ") {
+  if (key === " ") {
     keyPress.space = false;
   }
 }
@@ -667,14 +670,14 @@ function drawHUD() {
   ctx.fillText(
     `${currentLevel.name}`,
     HUD_SETTINGS.levelPosition.x,
-    HUD_SETTINGS.levelPosition.y
+    HUD_SETTINGS.levelPosition.y,
   );
 
   // Draw score
   ctx.fillText(
     `Score: ${score}`,
     HUD_SETTINGS.scorePosition.x,
-    HUD_SETTINGS.scorePosition.y
+    HUD_SETTINGS.scorePosition.y,
   );
 
   // Draw health bar
@@ -698,7 +701,7 @@ function drawHUD() {
   ctx.fillText(
     `${health.toFixed(2)}`,
     healthBarX + 5,
-    healthBarY + healthBarHeight - 5
+    healthBarY + healthBarHeight - 5,
   );
 }
 
@@ -711,7 +714,7 @@ function showGameOver() {
     canvas.width / 4,
     canvas.height / 6,
     canvas.width / 2,
-    canvas.height / 2
+    canvas.height / 2,
   );
   ctx.fillStyle = "black";
   ctx.font = "800% serif";
@@ -719,14 +722,14 @@ function showGameOver() {
     "You are dead",
     canvas.width / 4,
     canvas.height / 6 + canvas.height / 5,
-    (canvas.width / 16) * 14
+    (canvas.width / 16) * 14,
   );
   ctx.font = "500% serif";
   ctx.fillText(
     "Hit any key to restart",
     canvas.width / 4,
     canvas.height / 6 + canvas.height / 3,
-    (canvas.width / 16) * 14
+    (canvas.width / 16) * 14,
   );
   if (keyPress.any) {
     keyPress.any = false;
@@ -740,7 +743,7 @@ function showWinScreen() {
     canvas.width / 4,
     canvas.height / 6,
     canvas.width / 2,
-    canvas.height / 2
+    canvas.height / 2,
   );
   ctx.fillStyle = "white";
   ctx.font = "800% serif";
@@ -748,14 +751,14 @@ function showWinScreen() {
     "You Win!",
     canvas.width / 4,
     canvas.height / 6 + canvas.height / 5,
-    (canvas.width / 16) * 14
+    (canvas.width / 16) * 14,
   );
   ctx.font = "500% serif";
   ctx.fillText(
     "Hit any key to restart",
     canvas.width / 4,
     canvas.height / 6 + canvas.height / 3,
-    (canvas.width / 16) * 14
+    (canvas.width / 16) * 14,
   );
   if (keyPress.any) {
     keyPress.any = false;

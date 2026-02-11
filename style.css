@@ -1,98 +1,193 @@
+:root {
+  --max-width: 1100px;
+  --accent: #0a84ff;
+  --muted: #6b7280;
+  --bg: linear-gradient(180deg, #f7fbff 0%, #e6f7fb 100%);
+}
+* {
+  box-sizing: border-box;
+}
 body {
-  background: rgb(125, 198, 206);
-  color: rgb(45, 45, 45);
-  padding: 10px;
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  font-family:
+    Inter,
+    Segoe UI,
+    Arial,
+    Helvetica,
+    sans-serif;
+  color: #0f1724;
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
 }
 #all-contents {
-  max-width: 800px;
-  margin: auto;
+  max-width: var(--max-width);
+  margin: 32px auto;
+  padding: 20px;
 }
 
-/* navigation menu */
+/* header / nav */
 nav {
-  background: rgb(108, 167, 184);
-  margin: 0 auto;
-  display: flex;
-  padding: 10px;
-  margin-bottom: 20px;
-}
-
-h1 {
   display: flex;
   align-items: center;
-  color: blueviolet;
-  flex: 1;
-  margin: 0;
+  gap: 20px;
+  justify-content: space-between;
+  padding: 18px 24px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 10px;
+  box-shadow: 0 6px 22px rgba(16, 24, 40, 0.08);
 }
-
+nav h1 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--accent);
+}
 #nav-ul {
-  list-style-type: none;
+  list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
+  gap: 12px;
 }
-
 .nav-li {
-  display: inline-block;
-  padding: 0 10px;
+  display: inline;
 }
-a {
-  text-decoration: none;
-  color: #fff;
+.nav-li a {
+  color: #123;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
 }
-/* main container 
-area beneath menu*/
+.nav-li a:hover {
+  background: rgba(10, 132, 255, 0.12);
+  color: var(--accent);
+}
 
-main {
-  background: rgb(80, 70, 227);
+/* hero */
+.hero {
   display: flex;
-  margin-top: 20px;
+  gap: 24px;
+  align-items: center;
+  padding: 36px 0;
 }
-.sidebar {
-  margin-right: 25px;
-  padding: 10px;
+.hero .avatar {
+  flex: 0 0 220px;
 }
 .sidebar-img {
-  width: 200px;
+  width: 220px;
+  border-radius: 12px;
+  display: block;
+}
+.hero .intro {
+  flex: 1;
+  .hero-intro {
+    writing-mode: horizontal-tb;
+    transform: none;
+    display: block;
+    text-align: left;
+    margin-top: 12px;
+    margin-bottom: 16px;
+    line-height: 1.7;
+    letter-spacing: 0.03em;
+    /* Add or override any previous styles that made text vertical */
+  }
+}
+.hero h2 {
+  font-size: 36px;
+  margin: 0 0 8px;
+}
+.hero p {
+  color: var(--muted);
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+.btn {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+}
+.btn.ghost {
+  background: transparent;
+  border: 1px solid rgba(10, 132, 255, 0.12);
+  color: var(--accent);
+}
+
+/* main content */
+main {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  margin-top: 18px;
 }
 .content {
-  flex: 1;
-  padding: 15px;
+  background: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
+}
+.sidebar {
+  background: #fff;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.04);
 }
 
-/* interests
-section styles */
 #Interest {
-  border: 8px solid black;
-  padding: 8px;
-  margin-top: 20px;
+  padding: 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fff6e5, #fff1e0);
 }
+#Interest h3 {
+  margin: 0 0 8px;
+}
+
+/* portfolio cards */
+#portfolio {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.project-card {
+  background: linear-gradient(180deg, #f8fbff, #f3f9ff);
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(10, 132, 255, 0.06);
+}
+.project-card a {
+  color: #073;
+  display: block;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+/* utility */
+h1,
 h2,
 h3 {
-  margin: 0;
+  color: #0b1220;
+}
+p,
+li {
+  line-height: 1.45;
 }
 
-.content h1 {
-  color: black;
-}
-
-#portfolio {
-  list-style-type: none;
-  padding-left: 0;
-}
-
-#portfolio li {
-  background: #07536d;
-  padding: 10px;
-  border-radius: 10px;
-  margin-bottom: 10px;
-}
-#portfolio li:hover {
-  background: #eee;
-}
-
-#portfolio a {
-  text-decoration: none;
-  color: #000000;
+@media (max-width: 880px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+  .hero {
+    flex-direction: column;
+  }
+  .hero .avatar {
+    order: -1;
+  }
+  .sidebar-img {
+    width: 140px;
+  }
 }
